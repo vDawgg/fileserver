@@ -3,12 +3,63 @@
  */
 package backend;
 
+import io.grpc.Server;
+import io.grpc.ServerBuilder;
+
+import static java.lang.System.getenv;
+
 public class Retriever {
-    public String getGreeting() {
-        return "Hello World!";
+
+    //TODO: Look into how to set up health checks
+
+    //TODO: Look at java grpc authentication example (uses tokens, so might be interesting)
+    // https://github.com/grpc/grpc-java/tree/master/examples/example-jwt-auth
+    // if feeling like it google auth can be added as well:
+    // https://github.com/grpc/grpc-java/tree/master/examples/example-gauth
+
+    private final int port;
+    private final Server server;
+
+    //Stub for testing
+    public Retriever(ServerBuilder<?> serverBuilder, int port) {
+        this.port = port;
+        this.server = serverBuilder
+                .addService(new RetrieverImpl())
+                .build();
+    }
+
+    void start() throws Exception {
+        int port = Integer.parseInt(getenv().getOrDefault("PORT", "9390"));
+
+        server.start();
+
+        Runtime.getRuntime()
+                .addShutdownHook(
+                        new Thread(
+                                () -> {
+                                    System.err.println("*** Shutting down since JVM is shutting down");
+                                    Retriever.this.stop();
+                                    System.err.println("*** Server shutting down");
+                                }
+                        )
+                );
+    }
+
+    //Does the healthmanager need to be stopped here?
+    void stop() {
+        if (server!=null) {
+            server.shutdown();
+        }
+    }
+
+
+    static class RetrieverImpl extends RetrieverGrpc.RetrieverImplBase {
+
+
     }
 
     public static void main(String[] args) {
-        System.out.println(new App().getGreeting());
+
+
     }
 }

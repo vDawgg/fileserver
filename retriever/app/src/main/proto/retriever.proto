@@ -1,0 +1,73 @@
+syntax = 'proto3';
+
+import "google/protobuf/wrappers.proto";
+
+package backend;
+option java_multiple_files = true;
+option java_package = 'backend';
+option java_outer_classname = 'RetrieverProto';
+
+service Retriever {
+
+  //Should also be included in the frontend
+  rpc saveFiles(stream Chunk) returns (UploadStatus) {}
+
+  rpc sendStructure(StructureRequest) returns (Structure) {} //should show filestructure and contents
+
+  rpc getFiles(DownloadRequest) returns (stream Chunk) {} //should be able to send multiple files at once
+
+  //should also be included in the authenticator
+  rpc authenticate(User) returns (AuthenticationStatus) {}
+}
+
+message FileDescription {
+  string FileName = 1;
+  string Directory = 2; //Directories with one level for now
+  User User = 3; //Probably not a good idea to sen password all the time
+}
+
+enum UploadStatusCode {
+  Unknown = 0;
+  Ok = 1;
+  Failed = 2;
+}
+
+message UploadStatus {
+  UploadStatusCode Code = 1;
+}
+
+message Chunk {
+  FileDescription FileDescription = 1; //For metadata -> Also needs description of where the file is actually saved -> maybe just do something like collections for now
+  bytes Content = 2;
+}
+
+message User {
+  string name = 1;
+  string password = 2; //should probably be sent as a hash?
+}
+
+message StructureRequest { //Needs more when multiple levels are added
+  User User = 1;
+}
+
+message Directory {
+  string Name = 1;
+  repeated string FileName = 2;
+}
+
+message Structure {
+  repeated string Directory = 1;
+}
+
+message DownloadRequest {
+  FileDescription FileDescription = 1;
+}
+
+enum AuthenticationStatusCode {
+  Success = 0;
+  Failure = 1;
+}
+
+message AuthenticationStatus {
+  AuthenticationStatusCode Code = 1;
+}
