@@ -3,8 +3,18 @@
  */
 package backend;
 
+import com.google.protobuf.ByteString;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.stub.StreamObserver;
+
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.nio.ByteBuffer;
+import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import static java.lang.System.getenv;
 
@@ -16,6 +26,8 @@ public class Retriever {
     // https://github.com/grpc/grpc-java/tree/master/examples/example-jwt-auth
     // if feeling like it google auth can be added as well:
     // https://github.com/grpc/grpc-java/tree/master/examples/example-gauth
+
+    private static Logger logger = Logger.getLogger("Retriever");
 
     private final int port;
     private final Server server;
@@ -30,6 +42,8 @@ public class Retriever {
 
     void start() throws Exception {
         int port = Integer.parseInt(getenv().getOrDefault("PORT", "9390"));
+
+        //TODO: Set up connection to minio
 
         server.start();
 
@@ -55,6 +69,61 @@ public class Retriever {
 
     static class RetrieverImpl extends RetrieverGrpc.RetrieverImplBase {
 
+        //TODO: Implement functionality for sending multiple files
+        @Override
+        public StreamObserver<Chunk> saveFiles(StreamObserver<UploadStatus> responseObserver) {
+            return new StreamObserver<Chunk>() {
+                String filename;
+                String directory;
+                User user; //TODO: Implement users
+                ByteString bs;
+
+                @Override
+                public void onNext(Chunk value) {
+                    if(filename==null & directory==null) {
+                        filename = value.getFileDescription().getFileName();
+                        //directory = value.getFileDescription().getDirectory();
+                        logger.log(Level.INFO, "Receiving file with name: "+filename);
+                    }
+                    if(bs==null) bs = (ByteString) value.getContent();
+                    bs.concat((ByteString) value.getContent()); //Should work, but definitely needs to be checked!
+                }
+
+                @Override
+                public void onError(Throwable t) {
+                    responseObserver.onNext(UploadStatus.newBuilder() //Is this the right place??
+                                    .setCodeValue(2)
+                                    .build());
+                    logger.log(Level.WARNING, "An Error occurred while trying to save a File", t);
+                }
+
+                @Override
+                public void onCompleted() {
+                    //TODO: Add the file to the db
+                    responseObserver.onNext(UploadStatus.newBuilder()
+                                    .setCodeValue(1)
+                                    .build());
+                    //TODO: Delete file after saving it to the db to avoid write errors
+                    try {
+                        FileOutputStream fs = new FileOutputStream(filename);
+                        fs.write(bs.toByteArray());
+                    } catch (Exception e) {
+                        logger.log(Level.WARNING, "An error occured while trying to create a file"+e);
+                    }
+                }
+            };
+        }
+
+
+        @Override
+        public void sendStructure(StructureRequest request, StreamObserver<Structure> responseObserver) {
+
+        }
+
+        @Override
+        public void getFiles(DownloadRequest request, StreamObserver<Chunk> responseObserver) {
+
+        }
 
     }
 

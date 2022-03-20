@@ -3,9 +3,118 @@
  */
 package backend;
 
+import com.google.protobuf.ByteString;
+import io.grpc.ManagedChannel;
+import io.grpc.inprocess.InProcessChannelBuilder;
+import io.grpc.inprocess.InProcessServerBuilder;
+import io.grpc.stub.StreamObserver;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
-import static org.junit.Assert.*;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
 
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
+
+//Adapted from https://github.com/grpc/grpc-java/blob/master/examples/src/test/java/io/grpc/examples/routeguide/RouteGuideServerTest.java
+
+@RunWith(JUnit4.class)
 public class RetrieverTest {
 
+    private Retriever server;
+    private ManagedChannel inProcessChannel;
+
+    private Logger logger = Logger.getLogger("retrieverTest");
+
+    @Before
+    public void setUp() throws Exception {
+        String servername = InProcessServerBuilder.generateName();
+        server = new Retriever(
+                InProcessServerBuilder
+                        .forName(servername)
+                        .directExecutor()
+                , 9390
+        );
+        server.start();
+        inProcessChannel = InProcessChannelBuilder
+                .forName(servername)
+                .directExecutor()
+                .build();
+    }
+
+    @After
+    public void tearDown() throws Exception {
+        server.stop();
+    }
+
+    //TODO: Check the optimal chunk size - Testing from example hasn't bee that exhaustive yet
+    @Test
+    public void saveFiles() throws Exception {
+
+        //TODO: Remove Mocking to see if file actually gets correctly transferred
+
+        @SuppressWarnings("unchecked") //What does this actually do?
+        StreamObserver<UploadStatus> responseObserver = mock(StreamObserver.class);
+        RetrieverGrpc.RetrieverStub stub = RetrieverGrpc.newStub(inProcessChannel);
+        ArgumentCaptor<UploadStatus> retrieverCaptor = ArgumentCaptor.forClass(UploadStatus.class);
+        StreamObserver<Chunk> requestObserver = stub.saveFiles(responseObserver);
+
+        //TODO: Convert file to byte array and feed that byte array into chunks (byte array with file description of size 1000=1kb)
+        logger.log(Level.INFO, System.getProperty("user.dir"));
+        File file = new File("src/test/java/backend/grpc-icon-color.png");
+        byte[] fileBytes = Files.readAllBytes(file.toPath());
+        int i = 0;
+        int j = 1000;
+        while(j<fileBytes.length) {
+            logger.log(Level.INFO, "i: "+i+", j: "+j);
+            ByteString b = ByteString.copyFrom(Arrays.copyOfRange(fileBytes, i, j));
+            Chunk chunk = Chunk.newBuilder()
+                    .setFileDescription(
+                            FileDescription.newBuilder()
+                                    //.setDirectory()
+                                    .setFileName(file.getName())
+                                    //.setUser()
+                                    .build()
+                    )
+                    .setContent(b)
+                    .build();
+            requestObserver.onNext(chunk);
+            i = j+1;
+            j += 1000;
+        }
+
+        //TODO: Should be able to make this code look a lot nicer!
+        ByteString b = ByteString.copyFrom(Arrays.copyOfRange(fileBytes, i, fileBytes.length-1));
+        Chunk chunk = Chunk.newBuilder()
+                .setFileDescription(
+                        FileDescription.newBuilder()
+                                //.setDirectory()
+                                .setFileName(file.getName())
+                                //.setUser()
+                                .build()
+                )
+                .setContent(b)
+                .build();
+        requestObserver.onNext(chunk);
+
+        //verify(responseObserver, never()).onNext(any(UploadStatus.class)); //Is this necessary?
+
+        requestObserver.onCompleted();
+
+        //verify(responseObserver, timeout(100)).onNext(retrieverCaptor.capture());
+        UploadStatus us = retrieverCaptor.getValue();
+        assertEquals(UploadStatusCode.Ok, us.getCode());
+        //TODO: Herausfinden, was diese beiden Kollegen hier machen
+        //verify(responseObserver, timeout(100)).onCompleted();
+        //verify(responseObserver, never()).onError(any(Throwable.class));
+    }
 }
