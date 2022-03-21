@@ -16,6 +16,7 @@ import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 
 import java.io.File;
+import java.io.FileReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -59,16 +60,78 @@ public class RetrieverTest {
     //TODO: Check the optimal chunk size - Testing from example hasn't bee that exhaustive yet
     @Test
     public void saveFiles() throws Exception {
+        StreamObserver<UploadStatus> responseObserver = new StreamObserver<UploadStatus>() {
+            @Override
+            public void onNext(UploadStatus value) {
+                logger.log(Level.INFO, "Upload status: "+value.getCode());
+            }
 
-        //TODO: Remove Mocking to see if file actually gets correctly transferred
+            @Override
+            public void onError(Throwable t) {
+                logger.log(Level.WARNING, "An error occured while trying to send a file"+t.getMessage());
+            }
 
+            @Override
+            public void onCompleted() {
+                logger.log(Level.INFO, "Finished sending file.");
+            }
+        };
+
+        RetrieverGrpc.RetrieverStub stub = RetrieverGrpc.newStub(inProcessChannel);
+        StreamObserver<Chunk>  reuqestObserver = stub.saveFiles(responseObserver);
+
+        File file = new File("src/test/java/backend/T03_06_09.mp4");
+        byte[] fileBytes = Files.readAllBytes(file.toPath());
+        int i = 0;
+        int j = 1000;
+
+        while(j<fileBytes.length) {
+            ByteString b = ByteString.copyFrom(Arrays.copyOfRange(fileBytes, i, j));
+            Chunk chunk = Chunk.newBuilder()
+                    .setFileDescription(
+                            FileDescription.newBuilder()
+                                    //.setDirectory()
+                                    .setFileName(file.getName())
+                                    //.setUser()
+                                    .build()
+                    )
+                    .setContent(b)
+                    .build();
+            reuqestObserver.onNext(chunk);
+            i = j;
+            j += 1000;
+        }
+
+        //TODO: Should be able to make this code look a lot nicer!
+        ByteString b = ByteString.copyFrom(Arrays.copyOfRange(fileBytes, i, fileBytes.length));
+        Chunk chunk = Chunk.newBuilder()
+                .setFileDescription(
+                        FileDescription.newBuilder()
+                                //.setDirectory()
+                                .setFileName(file.getName())
+                                //.setUser()
+                                .build()
+                )
+                .setContent(b)
+                .build();
+
+        reuqestObserver.onNext(chunk);
+
+        reuqestObserver.onCompleted();
+
+        FileReader fr = new FileReader(new File("src/test/java/backend/T03_06_09.mp4"));
+
+        //Doesnt work correctly
+        assertEquals("Are these Files the same: ", fileBytes, Files.readAllBytes(new File("T03_06_09.mp4").toPath()));
+
+        /*
         @SuppressWarnings("unchecked") //What does this actually do?
-        StreamObserver<UploadStatus> responseObserver = mock(StreamObserver.class);
+        //StreamObserver<UploadStatus> responseObserver = mock(StreamObserver.class);
+        StreamObserver<UploadStatus> responseObserver = ;
         RetrieverGrpc.RetrieverStub stub = RetrieverGrpc.newStub(inProcessChannel);
         ArgumentCaptor<UploadStatus> retrieverCaptor = ArgumentCaptor.forClass(UploadStatus.class);
         StreamObserver<Chunk> requestObserver = stub.saveFiles(responseObserver);
 
-        //TODO: Convert file to byte array and feed that byte array into chunks (byte array with file description of size 1000=1kb)
         logger.log(Level.INFO, System.getProperty("user.dir"));
         File file = new File("src/test/java/backend/grpc-icon-color.png");
         byte[] fileBytes = Files.readAllBytes(file.toPath());
@@ -113,8 +176,10 @@ public class RetrieverTest {
         //verify(responseObserver, timeout(100)).onNext(retrieverCaptor.capture());
         UploadStatus us = retrieverCaptor.getValue();
         assertEquals(UploadStatusCode.Ok, us.getCode());
+
         //TODO: Herausfinden, was diese beiden Kollegen hier machen
         //verify(responseObserver, timeout(100)).onCompleted();
         //verify(responseObserver, never()).onError(any(Throwable.class));
+         */
     }
 }
