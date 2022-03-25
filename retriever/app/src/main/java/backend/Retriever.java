@@ -4,10 +4,14 @@ import com.google.protobuf.ByteString;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.stub.StreamObserver;
+
+import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.FileOutputStream;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import io.minio.MinioClient;
+
+import io.minio.*;
 
 import static java.lang.System.getenv;
 
@@ -25,7 +29,7 @@ public class Retriever {
     private final int port;
     private final Server server;
 
-    private MinioClient minioClient;
+    private static MinioClient minioClient;
 
     //Stub for testing
     public Retriever(ServerBuilder<?> serverBuilder, int port) {
@@ -35,18 +39,20 @@ public class Retriever {
                 .build();
     }
 
-    void start() throws Exception {
+    void start() {
         int port = Integer.parseInt(getenv().getOrDefault("PORT", "9390"));
 
         //TODO: Set up connection to minio
 
-        server.start();
-
-        minioClient =  MinioClient.builder()
-                .endpoint("http://127.0.0.1:9000") //Environment variables?
-                .credentials("minioadmin", "minioadmin") //Should be gotten via environment variables
-                .build();
-
+        try {
+            server.start();
+            minioClient = MinioClient.builder()
+                    .endpoint("http://127.0.0.1:9000") //Environment variables?
+                    .credentials("minioadmin", "minioadmin") //Should be gotten via environment variables
+                    .build();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         Runtime.getRuntime()
                 .addShutdownHook(
                         new Thread(
@@ -82,7 +88,7 @@ public class Retriever {
                 public void onNext(Chunk value) {
                     if(filename==null & directory==null) {
                         filename = value.getFileDescription().getFileName();
-                        //directory = value.getFileDescription().getDirectory();
+                        directory = value.getFileDescription().getDirectory();
                         logger.log(Level.INFO, "Receiving file with name: "+filename);
                     }
                     if(bs==null) {
@@ -110,8 +116,26 @@ public class Retriever {
                     try {
                         //File file = new File(filename);
                         //logger.log(Level.INFO, ""+bs.toByteArray().length);
+
+                        if (!minioClient.bucketExists(BucketExistsArgs.builder().bucket(directory).build())) {
+                            minioClient.makeBucket(MakeBucketArgs.builder().bucket(directory).build());
+                            logger.log(Level.INFO, "Created bucket: "+directory);
+                        }
+
+                        File file = new File(filename);
+
                         FileOutputStream fs = new FileOutputStream(filename);
                         fs.write(bs.toByteArray());
+
+                        //TODO: Think of meaningful headers and maybe use user metadata
+                        minioClient.putObject(
+                                PutObjectArgs.builder()
+                                        .bucket(directory)
+                                        .object(filename)
+                                        .stream(new ByteArrayInputStream(bs.toByteArray()), bs.size(), -1) //What does partsize do?
+                                        .build()
+                        );
+                        logger.log(Level.INFO, "Added file: "+filename);
                     } catch (Exception e) {
                         logger.log(Level.WARNING, "An error occured while trying to create a file"+e);
                     }
@@ -119,7 +143,7 @@ public class Retriever {
             };
         }
 
-
+        //Probably needs to be changed if thumbnails are to be shown
         @Override
         public void sendStructure(StructureRequest request, StreamObserver<Structure> responseObserver) {
 
@@ -130,10 +154,14 @@ public class Retriever {
 
         }
 
+        @Override
+        public void authenticate(User user, StreamObserver<AuthenticationStatus> responseObserver) {
+
+        }
+
     }
 
     public static void main(String[] args) {
-
 
     }
 }

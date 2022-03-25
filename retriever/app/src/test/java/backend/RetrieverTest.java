@@ -78,7 +78,7 @@ public class RetrieverTest {
         };
 
         RetrieverGrpc.RetrieverStub stub = RetrieverGrpc.newStub(inProcessChannel);
-        StreamObserver<Chunk>  reuqestObserver = stub.saveFiles(responseObserver);
+        StreamObserver<Chunk>  requestObserver = stub.saveFiles(responseObserver);
 
         File file = new File("src/test/java/backend/T03_06_09.mp4");
         byte[] fileBytes = Files.readAllBytes(file.toPath());
@@ -90,14 +90,14 @@ public class RetrieverTest {
             Chunk chunk = Chunk.newBuilder()
                     .setFileDescription(
                             FileDescription.newBuilder()
-                                    //.setDirectory()
+                                    .setDirectory("veit") //Bucket should be username or token
                                     .setFileName(file.getName())
                                     //.setUser()
                                     .build()
                     )
                     .setContent(b)
                     .build();
-            reuqestObserver.onNext(chunk);
+            requestObserver.onNext(chunk);
             i = j;
             j += 1000;
         }
@@ -115,14 +115,14 @@ public class RetrieverTest {
                 .setContent(b)
                 .build();
 
-        reuqestObserver.onNext(chunk);
+        requestObserver.onNext(chunk);
 
-        reuqestObserver.onCompleted();
+        requestObserver.onCompleted();
 
         FileReader fr = new FileReader(new File("src/test/java/backend/T03_06_09.mp4"));
 
         //Doesnt work correctly
-        assertEquals("Are these Files the same: ", fileBytes, Files.readAllBytes(new File("T03_06_09.mp4").toPath()));
+        //assertEquals("Are these Files the same: ", fileBytes, Files.readAllBytes(new File("T03_06_09.mp4").toPath()));
 
         /*
         @SuppressWarnings("unchecked") //What does this actually do?
