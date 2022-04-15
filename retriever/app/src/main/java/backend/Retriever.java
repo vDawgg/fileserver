@@ -6,12 +6,13 @@ import io.grpc.ServerBuilder;
 import io.grpc.stub.StreamObserver;
 
 import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import io.minio.*;
+import io.minio.messages.Item;
 
 import static java.lang.System.getenv;
 
@@ -21,10 +22,8 @@ public class Retriever {
 
     //TODO: Look at java grpc authentication example (uses tokens, so might be interesting)
     // https://github.com/grpc/grpc-java/tree/master/examples/example-jwt-auth
-    // if feeling like it google auth can be added as well:
-    // https://github.com/grpc/grpc-java/tree/master/examples/example-gauth
 
-    private static Logger logger = Logger.getLogger("Retriever");
+    private static final Logger logger = Logger.getLogger("Retriever");
 
     private final int port;
     private final Server server;
@@ -72,6 +71,18 @@ public class Retriever {
         }
     }
 
+    //TODO: Rename this for something better
+    public static String getTypeFromPathName(String pathName) {
+
+        String[] s = pathName.split("/");
+
+        if(!s[0].contains(".")) return "directory";
+
+        String[] result = s[0].split("\\.");
+
+        return result[1];
+    }
+
 
     static class RetrieverImpl extends RetrieverGrpc.RetrieverImplBase {
 
@@ -80,21 +91,20 @@ public class Retriever {
         public StreamObserver<Chunk> saveFiles(StreamObserver<UploadStatus> responseObserver) {
             return new StreamObserver<Chunk>() {
                 String filename;
-                String directory;
-                User user; //TODO: Implement users
+                String bucket;
                 ByteString bs;
 
                 @Override
                 public void onNext(Chunk value) {
-                    if(filename==null & directory==null) {
+                    if(filename==null & bucket==null) {
                         filename = value.getFileDescription().getFileName();
-                        directory = value.getFileDescription().getDirectory();
+                        bucket = value.getFileDescription().getBucket();
                         logger.log(Level.INFO, "Receiving file with name: "+filename);
                     }
                     if(bs==null) {
                         bs = (ByteString) value.getContent();
                     } else {
-                        bs = bs.concat((ByteString) value.getContent()); //Should work, but definitely needs to be checked!
+                        bs = bs.concat((ByteString) value.getContent());
                     }
                 }
 
@@ -117,21 +127,19 @@ public class Retriever {
                         //File file = new File(filename);
                         //logger.log(Level.INFO, ""+bs.toByteArray().length);
 
-                        if (!minioClient.bucketExists(BucketExistsArgs.builder().bucket(directory).build())) {
-                            minioClient.makeBucket(MakeBucketArgs.builder().bucket(directory).build());
-                            logger.log(Level.INFO, "Created bucket: "+directory);
+                        if (!minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build())) {
+                            minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
+                            logger.log(Level.INFO, "Created bucket: "+bucket);
                         }
 
-                        File file = new File(filename);
-
-                        FileOutputStream fs = new FileOutputStream(filename);
-                        fs.write(bs.toByteArray());
+                        Map<String, String> map = Map.of("filename", filename); //Is this even necessary?
 
                         //TODO: Think of meaningful headers and maybe use user metadata
                         minioClient.putObject(
                                 PutObjectArgs.builder()
-                                        .bucket(directory)
+                                        .bucket(bucket)
                                         .object(filename)
+                                        .headers(map)
                                         .stream(new ByteArrayInputStream(bs.toByteArray()), bs.size(), -1) //What does partsize do?
                                         .build()
                         );
@@ -143,22 +151,89 @@ public class Retriever {
             };
         }
 
-        //Probably needs to be changed if thumbnails are to be shown
+        //frontend should always start in home directory!
         @Override
-        public void sendStructure(StructureRequest request, StreamObserver<Structure> responseObserver) {
+        public void getStructure(StructureRequest request, StreamObserver<Structure> responseObserver) {
+            String bucket = request.getBucket();
+            String directory = request.getDirectory();
+            Structure.Builder structure = Structure.newBuilder();
 
+            Iterable<Result<Item>> it = minioClient.listObjects(ListObjectsArgs.builder()
+                            .prefix(directory)
+                            .bucket(bucket)
+                            .build());
+
+            try {
+                for (Result<Item> result : it) {
+                    String s = result.get().objectName();
+                    logger.log(Level.INFO, s);
+                    if(s.startsWith(directory)) {
+                        String subSequence = (String) s.subSequence(directory.length(), s.length());
+                        structure.addObject(Object.newBuilder()
+                                        .setName(subSequence)
+                                        .setType(getTypeFromPathName(subSequence))
+                                        .build());
+                    }
+                }
+                responseObserver.onNext(structure.build());
+            } catch (Exception e) {
+                logger.log(Level.WARNING, "Unable to retrieve filestructure for bucket: "+bucket);
+            }
         }
 
         @Override
         public void getFiles(DownloadRequest request, StreamObserver<Chunk> responseObserver) {
 
+            String bucket = request.getFileDescription().getBucket();
+            String filename = request.getFileDescription().getFileName();
+
+            try {
+                InputStream stream = minioClient.getObject(
+                        GetObjectArgs.builder()
+                                .bucket(bucket)
+                                .object(filename)
+                                .build());
+
+                ByteString bs = ByteString.readFrom(stream);
+
+                int i = 0;
+                int j = 1000;
+
+                while(j<bs.size()) {
+                    ByteString b = bs.substring(i, j);
+                    Chunk chunk = Chunk.newBuilder()
+                            .setFileDescription(
+                                    FileDescription.newBuilder()
+                                            .setFileName(filename)
+                                            .build())
+                            .setContent(b)
+                            .build();
+                    responseObserver.onNext(chunk);
+                    i = j;
+                    j += 1000;
+                }
+
+                //TODO: Should be able to make this code look a lot nicer!
+                ByteString b = bs.substring(i, bs.size());
+                Chunk chunk = Chunk.newBuilder()
+                        .setFileDescription(
+                                FileDescription.newBuilder()
+                                        .setFileName(filename)
+                                        .build())
+                        .setContent(b)
+                        .build();
+
+                responseObserver.onNext(chunk);
+
+                responseObserver.onCompleted();
+
+                logger.log(Level.INFO, "Sent file from bucket: "+bucket);
+
+            } catch (Exception e) {
+                logger.log(Level.WARNING, "Could not retrieve file of name: "+filename+", "+ Arrays.toString(e.getStackTrace())); //Is this a good idea for privacy???
+                e.printStackTrace();
+            }
         }
-
-        @Override
-        public void authenticate(User user, StreamObserver<AuthenticationStatus> responseObserver) {
-
-        }
-
     }
 
     public static void main(String[] args) {

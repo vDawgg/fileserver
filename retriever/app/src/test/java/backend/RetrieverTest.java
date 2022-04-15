@@ -16,9 +16,12 @@ import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 
 import java.io.File;
+import java.io.FileDescriptor;
+import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -34,7 +37,15 @@ public class RetrieverTest {
     private Retriever server;
     private ManagedChannel inProcessChannel;
 
-    private Logger logger = Logger.getLogger("retrieverTest");
+    String[] fileNames = new String[]{
+            "src/test/java/backend/grpc-icon-color.png",
+            "src/test/java/backend/gettyimages-899747778-612x612.jpg",
+            "wide_dog_cover2_.jpg"
+    };
+
+    private final String bucket = "veit";
+    private final Logger logger = Logger.getLogger("retrieverTest");
+
 
     @Before
     public void setUp() throws Exception {
@@ -77,109 +88,141 @@ public class RetrieverTest {
             }
         };
 
-        RetrieverGrpc.RetrieverStub stub = RetrieverGrpc.newStub(inProcessChannel);
-        StreamObserver<Chunk>  requestObserver = stub.saveFiles(responseObserver);
+        for(String fileName : fileNames) {
 
-        File file = new File("src/test/java/backend/T03_06_09.mp4");
-        byte[] fileBytes = Files.readAllBytes(file.toPath());
-        int i = 0;
-        int j = 1000;
+            RetrieverGrpc.RetrieverStub stub = RetrieverGrpc.newStub(inProcessChannel);
+            StreamObserver<Chunk>  requestObserver = stub.saveFiles(responseObserver);
 
-        while(j<fileBytes.length) {
-            ByteString b = ByteString.copyFrom(Arrays.copyOfRange(fileBytes, i, j));
+            File file = new File(fileName);
+            byte[] fileBytes = Files.readAllBytes(file.toPath());
+            int i = 0;
+            int j = 1000;
+
+            while (j < fileBytes.length) {
+                ByteString b = ByteString.copyFrom(Arrays.copyOfRange(fileBytes, i, j));
+                Chunk chunk = Chunk.newBuilder()
+                        .setFileDescription(
+                                FileDescription.newBuilder()
+                                        .setFileName(fileName)
+                                        .setBucket(bucket)
+                                        .build()
+                        )
+                        .setContent(b)
+                        .build();
+                requestObserver.onNext(chunk);
+                i = j;
+                j += 1000;
+            }
+
+            //TODO: Should be able to make this code look a lot nicer!
+            ByteString b = ByteString.copyFrom(Arrays.copyOfRange(fileBytes, i, fileBytes.length));
             Chunk chunk = Chunk.newBuilder()
+                    //TODO: Make Filedescription non repetetive
                     .setFileDescription(
                             FileDescription.newBuilder()
-                                    .setDirectory("veit") //Bucket should be username or token
-                                    .setFileName(file.getName())
-                                    //.setUser()
+                                    .setFileName(fileName)
+                                    .setBucket(bucket)
                                     .build()
                     )
                     .setContent(b)
                     .build();
-            requestObserver.onNext(chunk);
-            i = j;
-            j += 1000;
-        }
 
-        //TODO: Should be able to make this code look a lot nicer!
-        ByteString b = ByteString.copyFrom(Arrays.copyOfRange(fileBytes, i, fileBytes.length));
-        Chunk chunk = Chunk.newBuilder()
-                .setFileDescription(
-                        FileDescription.newBuilder()
-                                //.setDirectory()
-                                .setFileName(file.getName())
-                                //.setUser()
-                                .build()
-                )
-                .setContent(b)
+            requestObserver.onNext(chunk);
+
+            requestObserver.onCompleted();
+        }
+    }
+
+    //Working -> Needs proper automatic testing though!
+    @Test
+    public void getFiles() throws Exception {
+
+        StreamObserver<Chunk> responseObserver = new StreamObserver<Chunk>() {
+
+            String fn;
+            String b;
+            ByteString bs;;
+
+            @Override
+            public void onNext(Chunk value) {
+                if(fn ==null & b ==null) {
+                    fn = value.getFileDescription().getFileName();
+                    b = value.getFileDescription().getBucket();
+                    logger.log(Level.INFO, "Receiving file with name: "+ fn);
+                }
+                if(bs==null) {
+                    bs = (ByteString) value.getContent();
+                } else {
+                    bs = bs.concat((ByteString) value.getContent());
+                }
+            }
+
+            @Override
+            public void onError(Throwable t) {
+                logger.log(Level.WARNING, "Failed to receive file");
+            }
+
+            @Override
+            public void onCompleted() {
+                try {
+                    assertEquals(fn, fileNames[0]); //TODO: Make assertion work properly
+                    FileOutputStream fs = new FileOutputStream("grpc-icon-color.png");
+                    fs.write(bs.toByteArray());
+                } catch (Exception e) {
+                    logger.log(Level.WARNING, "Failed to receive file");
+                }
+            }
+        };
+
+        FileDescription fD = FileDescription.newBuilder()
+                .setFileName(fileNames[0])
+                .setBucket(bucket)
                 .build();
 
-        requestObserver.onNext(chunk);
+        DownloadRequest dR = DownloadRequest.newBuilder()
+                .setFileDescription(fD)
+                .build();
 
-        requestObserver.onCompleted();
-
-        FileReader fr = new FileReader(new File("src/test/java/backend/T03_06_09.mp4"));
-
-        //Doesnt work correctly
-        //assertEquals("Are these Files the same: ", fileBytes, Files.readAllBytes(new File("T03_06_09.mp4").toPath()));
-
-        /*
-        @SuppressWarnings("unchecked") //What does this actually do?
-        //StreamObserver<UploadStatus> responseObserver = mock(StreamObserver.class);
-        StreamObserver<UploadStatus> responseObserver = ;
         RetrieverGrpc.RetrieverStub stub = RetrieverGrpc.newStub(inProcessChannel);
-        ArgumentCaptor<UploadStatus> retrieverCaptor = ArgumentCaptor.forClass(UploadStatus.class);
-        StreamObserver<Chunk> requestObserver = stub.saveFiles(responseObserver);
+        stub.getFiles(dR, responseObserver);
 
-        logger.log(Level.INFO, System.getProperty("user.dir"));
-        File file = new File("src/test/java/backend/grpc-icon-color.png");
-        byte[] fileBytes = Files.readAllBytes(file.toPath());
-        int i = 0;
-        int j = 1000;
-        while(j<fileBytes.length) {
-            logger.log(Level.INFO, "i: "+i+", j: "+j);
-            ByteString b = ByteString.copyFrom(Arrays.copyOfRange(fileBytes, i, j));
-            Chunk chunk = Chunk.newBuilder()
-                    .setFileDescription(
-                            FileDescription.newBuilder()
-                                    //.setDirectory()
-                                    .setFileName(file.getName())
-                                    //.setUser()
-                                    .build()
-                    )
-                    .setContent(b)
-                    .build();
-            requestObserver.onNext(chunk);
-            i = j+1;
-            j += 1000;
-        }
+    }
 
-        //TODO: Should be able to make this code look a lot nicer!
-        ByteString b = ByteString.copyFrom(Arrays.copyOfRange(fileBytes, i, fileBytes.length-1));
-        Chunk chunk = Chunk.newBuilder()
-                .setFileDescription(
-                        FileDescription.newBuilder()
-                                //.setDirectory()
-                                .setFileName(file.getName())
-                                //.setUser()
-                                .build()
-                )
-                .setContent(b)
+    //getStructure working correctly -> Still needs real automated testing!
+    @Test
+    public void getStructure() throws Exception {
+        StreamObserver<Structure> responseObserver = new StreamObserver<Structure>() {
+
+            ArrayList<Object> s;
+
+            @Override
+            public void onNext(Structure value) {
+                logger.log(Level.INFO, "Receiving structure for bucket: "+bucket);
+                s = new ArrayList<>(value.getObjectList());
+                logger.log(Level.INFO, ""+s.size());
+                for(Object o : s) {
+                    logger.log(Level.INFO, "Filename: "+o.getName()+", filetype: "+o.getType());
+                }
+            }
+
+            @Override
+            public void onError(Throwable t) {
+                logger.log(Level.WARNING, "An error occurred while trying to receive the structure of bucket: "+bucket+", "+t.getMessage());
+            }
+
+            @Override
+            public void onCompleted() {
+
+            }
+        };
+
+        StructureRequest sr = StructureRequest.newBuilder()
+                .setBucket(bucket)
+                .setDirectory("src/test/java/backend/") //Directories NEED to look like this!
+                //.setDirectory("")
                 .build();
-        requestObserver.onNext(chunk);
 
-        //verify(responseObserver, never()).onNext(any(UploadStatus.class)); //Is this necessary?
-
-        requestObserver.onCompleted();
-
-        //verify(responseObserver, timeout(100)).onNext(retrieverCaptor.capture());
-        UploadStatus us = retrieverCaptor.getValue();
-        assertEquals(UploadStatusCode.Ok, us.getCode());
-
-        //TODO: Herausfinden, was diese beiden Kollegen hier machen
-        //verify(responseObserver, timeout(100)).onCompleted();
-        //verify(responseObserver, never()).onError(any(Throwable.class));
-         */
+        RetrieverGrpc.RetrieverStub stub = RetrieverGrpc.newStub(inProcessChannel);
+        stub.getStructure(sr, responseObserver);
     }
 }

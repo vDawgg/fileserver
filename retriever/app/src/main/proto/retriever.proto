@@ -12,18 +12,19 @@ service Retriever {
   //Should also be included in the frontend
   rpc saveFiles(stream Chunk) returns (UploadStatus) {}
 
-  rpc sendStructure(StructureRequest) returns (Structure) {} //should show filestructure and contents
+  rpc getStructure(StructureRequest) returns (Structure) {} //should show filestructure and contents
 
   rpc getFiles(DownloadRequest) returns (stream Chunk) {} //should be able to send multiple files at once
 
   //should also be included in the authenticator
-  rpc authenticate(User) returns (AuthenticationStatus) {}
+  rpc logIn(User) returns (AuthenticationStatus) {}
+
+  rpc authenticate(Token) returns (AuthenticationStatus) {}
 }
 
 message FileDescription {
   string FileName = 1;
-  string Directory = 2; //Directories with one level for now
-  User User = 3; //Probably not a good idea to sen password all the time
+  string Bucket = 2; //Probably not a good idea to sen password all the time
 }
 
 enum UploadStatusCode {
@@ -42,12 +43,12 @@ message Chunk {
 }
 
 message User {
-  string name = 1;
-  string password = 2; //should probably be sent as a hash?
+  string pass = 1;
 }
 
 message StructureRequest { //Needs more when multiple levels are added
-  User User = 1;
+  string bucket = 1;
+  string directory = 2;
 }
 
 message Directory {
@@ -56,7 +57,12 @@ message Directory {
 }
 
 message Structure {
-  repeated string Directory = 1;
+  repeated Object Object = 1;
+}
+
+message Object {
+  string name = 1;
+  string type = 2;
 }
 
 message DownloadRequest {
@@ -68,6 +74,11 @@ enum AuthenticationStatusCode {
   Failure = 1;
 }
 
+message Token {
+  string token = 1;
+}
+
 message AuthenticationStatus {
   AuthenticationStatusCode Code = 1;
+  string bucket = 2;
 }
