@@ -1,0 +1,30 @@
+syntax = "proto3";
+package auth; //what package should this be in?
+
+service authenticator {
+  //Rpc for getting public keys of the backend
+  rpc getKeys(Empty) returns (Keys) {}
+  //Rpc to log in a user
+  rpc login(User) returns (Token) {}
+}
+
+message Empty {}
+
+message Keys {
+  string keys = 1;
+}
+
+message User {
+  bytes name = 1;
+  bytes password = 2;
+}
+
+message Token {
+  string token = 1;
+  AuthStatus status = 2;
+}
+
+enum AuthStatus {
+  OK = 0;
+  FAILED = 1;
+}
