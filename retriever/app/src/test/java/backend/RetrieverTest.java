@@ -13,21 +13,16 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.mockito.ArgumentCaptor;
 
 import java.io.File;
-import java.io.FileDescriptor;
 import java.io.FileOutputStream;
-import java.io.FileReader;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
 
 //Adapted from https://github.com/grpc/grpc-java/blob/master/examples/src/test/java/io/grpc/examples/routeguide/RouteGuideServerTest.java
 
@@ -39,8 +34,8 @@ public class RetrieverTest {
 
     String[] fileNames = new String[]{
             "src/test/java/backend/grpc-icon-color.png",
-            "src/test/java/backend/gettyimages-899747778-612x612.jpg",
-            "wide_dog_cover2_.jpg"
+            "src/test/java/backend/test.txt",
+            "src/test/java/backend/Hyla_japonica_sep01.jpg"
     };
 
     private final String bucket = "veit";

@@ -1,0 +1,3 @@
+Ein Test ist ein methodischer Versuch, mit dem festgestellt werden soll, ob Eigenschaften oder Leistung einer Sache, einer Person oder einer Hypothese den Erwartungen entsprechen.[1][2] Der Test unterscheidet sich vom Experiment dadurch, dass es beim Test eine Erwartung gibt, die belegt oder widerlegt werden soll, während das Ergebnis beim Experiment offen ist oder nur vermutet werden kann.[3]
+
+Mit Testung wird das Testen, das Getestetwerden bezeichnet,[4] die Untersuchung eines Gegenstandes oder Sachverhaltes, zum Beispiel auf Richtigkeit oder Funktionsfähigkeit.
