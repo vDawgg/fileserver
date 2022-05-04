@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package authorizer;
+option go_package = "./;authorizer";
+
+service authorizer {
+	rpc isAuthorized(AuthRequest) returns (AuthReply) {}
+	rpc getKeys(Empty) returns (Keys) {}
+}
+
+message AuthRequest {
+	string token = 1;
+	repeated string access = 2;
+}
+
+message AuthReply {
+	bool isAuthorized = 1; 
+}
+
+message Empty {}
+
+message Keys {
+	string Keys = 1;
+}
