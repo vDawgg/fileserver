@@ -8,8 +8,8 @@ import jwt
 import grpc
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
-from proto import authenticator_pb2_grpc
-from proto import authenticator_pb2
+from proto import unified_pb2_grpc
+from proto import unified_pb2
 from concurrent import futures
 from pymongo import MongoClient
 from pprint import pprint
@@ -51,9 +51,10 @@ def token(name, uid):
     return t  # Need to add encryption here
 
 
-class authenticatorServicer(authenticator_pb2_grpc.authenticatorServicer):
+class authenticatorServicer(unified_pb2_grpc.authenticatorServicer):
 
     def getKeys(self, request, context):
+        print("Received request for getKeys!")
         if not exists("keys/private.pem"):
             print("Creating keys")
             key = RSA.generate(2048)
@@ -66,7 +67,7 @@ class authenticatorServicer(authenticator_pb2_grpc.authenticatorServicer):
             file_out.write(public_key)
             file_out.close()
         public = open("keys/public.pem").read()
-        return authenticator_pb2.Keys(keys=public)  # keys needs to be specified to not throw an error
+        return unified_pb2.Keys(keys=public)  # keys needs to be specified to not throw an error
 
     def login(self, request, context):
 
@@ -91,9 +92,9 @@ class authenticatorServicer(authenticator_pb2_grpc.authenticatorServicer):
 
         orig = db.password.find_one({'name': name})
         if orig is None:
-            return authenticator_pb2.Token(
+            return unified_pb2.Token(
                 token=None,
-                status=authenticator_pb2.AuthStatus.FAILED
+                status=unified_pb2.AuthStatus.FAILED
             )
 
         check = hashlib.pbkdf2_hmac(
@@ -109,21 +110,21 @@ class authenticatorServicer(authenticator_pb2_grpc.authenticatorServicer):
             t = token(name, orig['id'])
             pprint(t)
             print(token(name, orig['id']))
-            return authenticator_pb2.Token(
+            return unified_pb2.Token(
                 token=token(name, orig['id']),
-                status=authenticator_pb2.AuthStatus.OK
+                status=unified_pb2.AuthStatus.OK
             )
         else:
             print('Password incorrect')
-            return authenticator_pb2.Token(
+            return unified_pb2.Token(
                 token=None,
-                status=authenticator_pb2.AuthStatus.FAILED
+                status=unified_pb2.AuthStatus.FAILED
             )
 
 
 def serve():
     server = grpc.server(futures.ThreadPoolExecutor(10))  # is this necessary?
-    authenticator_pb2_grpc.add_authenticatorServicer_to_server(authenticatorServicer(), server)
+    unified_pb2_grpc.add_authenticatorServicer_to_server(authenticatorServicer(), server)
     server.add_insecure_port('[::]:50051')  # TODO: Change to secure
     server.start()
     print("Started Server")

@@ -1,0 +1,104 @@
+syntax = "proto3";
+
+package fileserver;
+option go_package = "./;fileserver";
+
+//--------------Retriever---------------
+
+service Retriever {
+
+  //Should also be included in the frontend
+  rpc saveFiles(stream Chunk) returns (UploadStatus) {}
+
+  rpc getStructure(StructureRequest) returns (Structure) {} //should show filestructure and contents
+
+  rpc getFiles(DownloadRequest) returns (stream Chunk) {} //should be able to send multiple files at once
+}
+
+message FileDescription {
+  string FileName = 1;
+  string Bucket = 2; //Probably not a good idea to sen password all the time
+}
+
+enum UploadStatusCode {
+  Unknown = 0;
+  Ok = 1;
+  Failed = 2;
+}
+
+message UploadStatus {
+  UploadStatusCode Code = 1;
+}
+
+message Chunk {
+  FileDescription FileDescription = 1; //For metadata -> Also needs description of where the file is actually saved -> maybe just do something like collections for now
+  bytes Content = 2;
+}
+
+message StructureRequest { //Needs more when multiple levels are added
+  string bucket = 1;
+  string directory = 2;
+}
+
+message Directory {
+  string Name = 1;
+  repeated string FileName = 2;
+}
+
+message Structure {
+  repeated Object Object = 1;
+}
+
+message Object {
+  string name = 1;
+  string type = 2;
+}
+
+message DownloadRequest {
+  FileDescription FileDescription = 1;
+}
+
+//--------------Authenticator------------
+
+service authenticator {
+  //Rpc for getting public keys of the backend
+  rpc getKeys(Empty) returns (Keys) {}
+  //Rpc to log in a user
+  rpc login(User) returns (Token) {}
+}
+
+message Empty {}
+
+message Keys {
+  string keys = 1;
+}
+
+message User {
+  bytes name = 1;
+  bytes password = 2;
+}
+
+message Token {
+  string token = 1;
+  AuthStatus status = 2;
+}
+
+enum AuthStatus {
+  OK = 0;
+  FAILED = 1;
+}
+
+//--------------Authorizer---------------
+
+service authorizer {
+  rpc isAuthorized(AuthRequest) returns (AuthReply) {}
+}
+
+message AuthRequest {
+  string token = 1;
+  repeated string access = 2;
+}
+
+message AuthReply {
+  bool isAuthorized = 1;
+}
