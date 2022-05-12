@@ -92,6 +92,7 @@ enum AuthStatus {
 
 service authorizer {
   rpc isAuthorized(AuthRequest) returns (AuthReply) {}
+  rpc addAuthorization(AuthRequest) returns (Added) {}
 }
 
 message AuthRequest {
@@ -101,4 +102,8 @@ message AuthRequest {
 
 message AuthReply {
   bool isAuthorized = 1;
+}
+
+message Added {
+  bool wasAdded = 1;
 }
