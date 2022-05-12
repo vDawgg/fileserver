@@ -19,14 +19,14 @@ def log_in(name, password, stub):
     cipher = PKCS1_OAEP.new(key)
     name = cipher.encrypt(name)
     password = cipher.encrypt(password)
-    # f1 = open("nameEncrypted", "wb")
-    # f2 = open("passEncrypted", "wb")
-    # f1.write(name)
-    # f2.write(password)
+    f1 = open("../authorizer/client/nameEncrypted", "wb")
+    f2 = open("../authorizer/client/passEncrypted", "wb")
+    f1.write(name)
+    f2.write(password)
     request = unified_pb2.User(name=name, password=password)
     answer = stub.login(request)
     print("Answer:", answer.token)
-    pprint(jwt.decode(answer.token, "secret", algorithms=["HS256"]))
+    pprint(jwt.decode(answer.token, open("keys/public.pem").read(), algorithms=["RS256"]))
 
 
 def run():
