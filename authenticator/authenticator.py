@@ -45,8 +45,8 @@ def token(name, uid):
     t = jwt.encode({
         'user': user,
         'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
-    }, "secret",
-        algorithm="HS256")
+    },  open("keys/private.pem").read(),
+        algorithm="RS256")
     print("Token:", t)
     return t  # Need to add encryption here
 
@@ -58,7 +58,7 @@ class authenticatorServicer(unified_pb2_grpc.authenticatorServicer):
         if not exists("keys/private.pem"):
             print("Creating keys")
             key = RSA.generate(2048)
-            private_key = key.export_key('PEM', '3b1j873bhj')  # What should the passphrase be?
+            private_key = key.export_key("PEM")  # What should the passphrase be?
             file_out = open("keys/private.pem", "wb")
             file_out.write(private_key)
             file_out.close()
@@ -69,6 +69,7 @@ class authenticatorServicer(unified_pb2_grpc.authenticatorServicer):
         public = open("keys/public.pem").read()
         return unified_pb2.Keys(keys=public)  # keys needs to be specified to not throw an error
 
+    # TODO: Make sure, that keys are generated before trying to login! -> Shouldnt really be a problem, but still
     def login(self, request, context):
 
         # TODO: Change to env variables
@@ -82,7 +83,6 @@ class authenticatorServicer(unified_pb2_grpc.authenticatorServicer):
             print("yup")
             init_db(db)
 
-        # TODO: Change this to also work with jwt
         private = RSA.importKey(open("keys/private.pem").read(), "3b1j873bhj")
         cipher = PKCS1_OAEP.new(private)
         name_crypt = request.name
