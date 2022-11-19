@@ -192,6 +192,7 @@ func accessMatches(request []string, db []string) bool {
 
 func main() {
 	//Change this port?
+	fmt.Println("Starting authorizer")
 	listen, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", 5555))
 	if err != nil {
 		//TODO: Change output to logs
