@@ -3,3 +3,5 @@
 
 # Ignore Gradle build output directory
 build
+authenticator/keys/private.pem
+authenticator/keys/public.pem
