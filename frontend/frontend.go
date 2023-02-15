@@ -1,33 +1,22 @@
 package main
 
 import (
-	pb "main/proto"
-	"fmt"
 	"context"
+	"fmt"
 	"html/template"
 	"log"
+	pb "main/proto"
+	"main/helpers"
 	"net/http"
-	//"os"
-
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
-func testHandler (w http.ResponseWriter, r *http.Request) {
+func testHandler(w http.ResponseWriter, r *http.Request) {
 	type Page struct {
 		Out string
 	}
 
-	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	connAuthenticator, err := grpc.Dial("localhost:50051", opts...)
-	if err != nil {
-		fmt.Println("Unable to connect to Authenticator: ", err)
-	}
-	defer connAuthenticator.Close()
-
-	clientAuthenticator := pb.NewAuthenticatorClient(connAuthenticator)
-
+	clientAuthenticator := helpers.GetAuthenticatorClient()
+	
 	empty := &pb.Empty{}
 	keys, err := clientAuthenticator.GetKeys(context.Background(), empty)
 	if err != nil {
@@ -37,10 +26,30 @@ func testHandler (w http.ResponseWriter, r *http.Request) {
 
 	p := &Page{Out: keys.Keys}
 	t, _ := template.ParseFiles("templates/index.html")
-	t.Execute(w, p)
+	err = t.Execute(w, p)
+	if err != nil {
+		return
+	}
+}
+
+func loginHandler(w http.ResponseWriter, r *http.Request) {
+
+	clientAuthenticator := helpers.GetAuthenticatorClient()
+
+	empty := &pb.User{}
+	token, err := clientAuthenticator.Login(context.Background(), empty)
+	if err != nil {
+		fmt.Println("Failed to get keys: ", err)
+		return
+	}
+
+	fmt.Println(token)
 }
 
 func main() {
-	http.HandleFunc("/", testHandler);
-	log.Fatal(http.ListenAndServe(":8080", nil));
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+
+	http.HandleFunc("/", testHandler)
+	http.HandleFunc("/login", loginHandler)
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
