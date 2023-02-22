@@ -1,8 +1,11 @@
-package backend;
+package fileserver;
 
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Iterators;
 import com.google.protobuf.ByteString;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 
 import java.io.ByteArrayInputStream;
@@ -34,6 +37,14 @@ public class Retriever {
     public Retriever(ServerBuilder<?> serverBuilder, int port) {
         this.port = port;
         this.server = serverBuilder
+                .addService(new RetrieverImpl())
+                .build();
+    }
+
+    //TODO: Add a healthmanager here
+    public Retriever(int port) {
+        this.port = port;
+        this.server = ServerBuilder.forPort(port)
                 .addService(new RetrieverImpl())
                 .build();
     }
@@ -163,9 +174,15 @@ public class Retriever {
                             .bucket(bucket)
                             .build());
 
+            if (Iterables.size(it) == 0) {
+                logger.log(Level.INFO, "Client tried to search in non existant directory");
+                responseObserver.onError(Status.INVALID_ARGUMENT.asRuntimeException());
+            }
+
             try {
                 for (Result<Item> result : it) {
                     String s = result.get().objectName();
+                    System.out.println(s);
                     logger.log(Level.INFO, s);
                     if(s.startsWith(directory)) {
                         String subSequence = (String) s.subSequence(directory.length(), s.length());
@@ -176,8 +193,10 @@ public class Retriever {
                     }
                 }
                 responseObserver.onNext(structure.build());
+                responseObserver.onCompleted();
             } catch (Exception e) {
-                logger.log(Level.WARNING, "Unable to retrieve filestructure for bucket: "+bucket);
+                logger.log(Level.WARNING, "Unable to retrieve filestructure for bucket: "+bucket+"; "+e.getMessage());
+                responseObserver.onError(Status.INTERNAL.asRuntimeException());
             }
         }
 
@@ -216,8 +235,7 @@ public class Retriever {
                 //TODO: Should be able to make this code look a lot nicer!
                 ByteString b = bs.substring(i, bs.size());
                 Chunk chunk = Chunk.newBuilder()
-                        .setFileDescription(
-                                FileDescription.newBuilder()
+                        .setFileDescription(FileDescription.newBuilder()
                                         .setFileName(filename)
                                         .build())
                         .setContent(b)
@@ -236,7 +254,19 @@ public class Retriever {
         }
     }
 
-    public static void main(String[] args) {
+    private void blockUntilShutdown() throws InterruptedException {
+        if (server != null) {
+            server.awaitTermination();
+        }
+    }
 
+    public static void main(String[] args) {
+        Retriever service = new Retriever(9390);
+        try {
+            service.start();
+            service.blockUntilShutdown();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }
