@@ -1,11 +1,15 @@
 syntax = 'proto3';
 
+package fileserver;
+
 import "google/protobuf/wrappers.proto";
 
-package backend;
 option java_multiple_files = true;
-option java_package = 'backend';
+option java_package = 'fileserver';
 option java_outer_classname = 'RetrieverProto';
+option go_package = "./;fileserver";
+
+//--------------Retriever---------------
 
 service Retriever {
 
@@ -15,11 +19,6 @@ service Retriever {
   rpc getStructure(StructureRequest) returns (Structure) {} //should show filestructure and contents
 
   rpc getFiles(DownloadRequest) returns (stream Chunk) {} //should be able to send multiple files at once
-
-  //should also be included in the authenticator
-  rpc logIn(User) returns (AuthenticationStatus) {}
-
-  rpc authenticate(Token) returns (AuthenticationStatus) {}
 }
 
 message FileDescription {
@@ -42,10 +41,7 @@ message Chunk {
   bytes Content = 2;
 }
 
-message User {
-  string pass = 1;
-}
-
+//TODO: Add functionality for authorization
 message StructureRequest { //Needs more when multiple levels are added
   string bucket = 1;
   string directory = 2;
@@ -69,16 +65,52 @@ message DownloadRequest {
   FileDescription FileDescription = 1;
 }
 
-enum AuthenticationStatusCode {
-  Success = 0;
-  Failure = 1;
+//--------------Authenticator------------
+
+service authenticator {
+  //Rpc for getting public keys of the backend
+  rpc getKeys(Empty) returns (Keys) {}
+  //Rpc to log in a user
+  rpc login(User) returns (Token) {}
+}
+
+message Empty {}
+
+message Keys {
+  string keys = 1;
+}
+
+message User {
+  bytes name = 1;
+  bytes password = 2;
 }
 
 message Token {
   string token = 1;
+  AuthStatus status = 2;
 }
 
-message AuthenticationStatus {
-  AuthenticationStatusCode Code = 1;
-  string bucket = 2;
+enum AuthStatus {
+  OK = 0;
+  FAILED = 1;
+}
+
+//--------------Authorizer---------------
+
+service authorizer {
+  rpc isAuthorized(AuthRequest) returns (AuthReply) {}
+  rpc addAuthorization(AuthRequest) returns (Added) {}
+}
+
+message AuthRequest {
+  string token = 1;
+  repeated string access = 2;
+}
+
+message AuthReply {
+  bool isAuthorized = 1;
+}
+
+message Added {
+  bool wasAdded = 1;
 }
