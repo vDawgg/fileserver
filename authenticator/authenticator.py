@@ -75,7 +75,7 @@ class authenticatorServicer(unified_pb2_grpc.authenticatorServicer):
         # TODO: Change to env variables
         client = MongoClient(port=27017)
         try:
-            print(client.server_info())
+            client.server_info()
         except Exception:
             print("Connection to mongodb failed!")
         db = client.passwords
