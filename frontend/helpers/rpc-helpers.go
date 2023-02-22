@@ -20,3 +20,16 @@ func GetAuthenticatorClient() pb.AuthenticatorClient {
 
 	return clientAuthenticator
 }
+
+func GetRetrieverClient() pb.RetrieverClient {
+	var opts []grpc.DialOption
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	connRetriever, err := grpc.Dial("localhost:9390", opts...)
+	if err != nil {
+		fmt.Println("Unable to connect to Retriever: ", err)
+	}
+
+	retrieverClient := pb.NewRetrieverClient(connRetriever)
+
+	return retrieverClient
+}

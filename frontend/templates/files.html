@@ -1,0 +1,13 @@
+<head>
+    <link rel="stylesheet" href="static/style.css" type="text/css">
+</head>
+
+<body>
+    <div class="wrapper">
+        <h1>Files: </h1>
+        {{range .Objects}}
+            <p>{{.Name}}</p>
+            <p>{{.Type}}</p>
+        {{ end }}
+    </div>
+</body>
