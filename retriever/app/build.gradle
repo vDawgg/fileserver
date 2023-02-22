@@ -10,9 +10,6 @@ plugins {
     id 'idea'
 }
 
-sourceCompatibility = 1.9 //What does this do?
-targetCompatibility = 1.9
-
 def grpcVersion = '1.44.0' // CURRENT_GRPC_VERSION
 def protobufVersion = '3.19.2'
 def protocVersion = protobufVersion
@@ -53,8 +50,12 @@ sourceSets {
 
 startScripts.enabled = false
 
+application {
+    mainClass = 'fileserver.Retriever'
+}
+
 task retriever(type: CreateStartScripts) {
-    mainClass = 'backend.Retriever'
+    mainClass = 'fileserver.Retriever'
     applicationName('Retriever')
     outputDir(new File(project.buildDir, 'tmp')) //Check this filestructure
     classpath = startScripts.classpath
